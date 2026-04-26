@@ -6,8 +6,8 @@
 DFRobot_HumanDetection hu(&Serial2);
 
 // -------- CHANGE THESE --------
-const char* WIFI_SSID   = "Iphone 15 plus";
-const char* WIFI_PASS   = "88888888";
+const char* WIFI_SSID   = "Galaxy A25 5G BD6A";
+const char* WIFI_PASS   = "12345678";
 const char* MQTT_BROKER = "broker.hivemq.com";
 const char* MQTT_TOPIC  = "nivaasiq/bathroom/status";
 const int   MQTT_PORT   = 1883;

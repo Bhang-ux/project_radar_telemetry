@@ -1,0 +1,7 @@
+upload wifi credentials in the firmware code(DirectConnect+MQTT(store))
+upload the code on MCU
+Connect the MCU to adapter
+MQTT Server should see the current states
+Disconnect and plug in to LaptopMQTT
+run the RunStoredData.py file
+a csv file will come at data with all thetime stamps

@@ -1,73 +1,140 @@
 #include <Arduino.h>
+#include "DFRobot_HumanDetection.h"
+#include <WiFi.h>
+#include <PubSubClient.h>
 
-uint8_t packet[10]; 
+DFRobot_HumanDetection hu(&Serial2);
 
-// --- THE SCOREBOARD (Remembers everything for the CSV) ---
-int presence = 0;
-int fallState = 0;
-int distance = 0;
-int intensity = 0;
-int breathRate = 0;
-int heartRate = 0;
+// -------- CHANGE THESE --------
+const char* WIFI_SSID   = "Galaxy A25 5G BD6A";
+const char* WIFI_PASS   = "12345678";
+const char* MQTT_BROKER = "broker.hivemq.com";
+const char* MQTT_TOPIC  = "nivaasiq/bathroom/status";
+const int   MQTT_PORT   = 1883;
+// ------------------------------
+
+WiFiClient wifiClient;
+PubSubClient mqtt(wifiClient);
+
+unsigned long stillSince = 0;
+String lastMessage = "";
+
+void connectWiFi() {
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+}
+
+void connectMQTT() {
+  while (!mqtt.connected()) {
+    Serial.print("Connecting to MQTT...");
+    if (mqtt.connect("NivaasIQ_Device")) {
+      Serial.println("connected");
+    } else {
+      Serial.print("failed, retrying in 3 seconds");
+      delay(3000);
+    }
+  }
+}
+
+void sendMessage(String msg) {
+  // Reconnect if dropped
+  if (!mqtt.connected()) connectMQTT();
+
+  if (msg != lastMessage) {
+    // State changed — print loudly on serial
+    Serial.println("----------------------------------------");
+    Serial.println(msg);
+    Serial.println("----------------------------------------");
+
+    // Send to phone via MQTT
+    mqtt.publish(MQTT_TOPIC, msg.c_str());
+
+    lastMessage = msg;
+  } else {
+    // Same state — just a heartbeat dot
+    Serial.println(".");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
-  // Using Serial2 (P16=RX, P17=TX)
   Serial2.begin(115200, SERIAL_8N1, 16, 17);
-  
-  delay(1000);
 
-  // Command to ensure sensor is active and reporting
-  uint8_t unlockCmd[] = {0x53, 0x59, 0x01, 0x01, 0x00, 0x01, 0x0F, 0x64, 0x54, 0x43};
-  Serial2.write(unlockCmd, sizeof(unlockCmd));
+  connectWiFi();
+  mqtt.setServer(MQTT_BROKER, MQTT_PORT);
+  connectMQTT();
 
-  // CSV Header - All variables now included
-  Serial.println("Presence,Fall_State,Distance_dm,Intensity,Breath_Rate,Heart_Rate,Raw_Hex");
+  Serial.println("Initializing sensor...");
+  while (hu.begin() != 0) {
+    Serial.println("Sensor not ready, retrying...");
+    delay(1000);
+  }
+  while (hu.configWorkMode(hu.eFallingMode) != 0) {
+    Serial.println("Mode switch failed, retrying...");
+    delay(1000);
+  }
+
+  hu.dmInstallHeight(270);
+  hu.dmFallTime(5);
+  hu.dmUnmannedTime(1);
+  hu.dmFallConfig(hu.eResidenceTime, 200);
+  hu.dmFallConfig(hu.eFallSensitivityC, 3);
+  hu.sensorRet();
+
+  Serial.println("System ready. Monitoring bathroom...");
 }
 
 void loop() {
-  if (Serial2.available() >= 10) {
-    // Look for Header 0x53 0x59
-    if (Serial2.read() == 0x53 && Serial2.peek() == 0x59) {
-      Serial2.read(); // Consume 0x59
-      
-      for (int i = 2; i < 10; i++) {
-        packet[i] = Serial2.read();
-      }
 
-      uint8_t control = packet[2];
+  // Keep MQTT connection alive
+  mqtt.loop();
 
-      // --- LOGIC: UPDATE ONLY WHAT THE PACKET CONTAINS ---
-      if (control == 0x80) {        // STATUS PACKET
-        presence = packet[6];
-        fallState = packet[7];
-      } 
-      else if (control == 0x81) {   // MOTION PACKET
-        distance = packet[6];
-        intensity = packet[7];
-      }
-      else if (control == 0x84) {   // MEDICAL PACKET
-        breathRate = packet[6];
-        heartRate = packet[7];
-      }
+  int presence    = hu.smHumanData(hu.eHumanPresence);
+  int movement    = hu.smHumanData(hu.eHumanMovement);
+  int movingRange = hu.smHumanData(hu.eHumanMovingRange);
+  int fallState   = hu.getFallData(hu.eFallState);
+  int staticDwell = hu.getFallData(hu.estaticResidencyState);
 
-      // --- PRINT THE COMPLETE CSV ROW ---
-      // We print EVERY variable every time a packet arrives to keep columns stable
-      Serial.print(presence);   Serial.print(",");
-      Serial.print(fallState);  Serial.print(",");
-      Serial.print(distance);   Serial.print(",");
-      Serial.print(intensity);  Serial.print(",");
-      Serial.print(breathRate); Serial.print(",");
-      Serial.print(heartRate);  Serial.print(",");
+  String currentMessage = "";
 
-      // Raw Hex for verification
-      Serial.print("53 59 ");
-      for(int j=2; j<10; j++) {
-        if(packet[j] < 16) Serial.print("0");
-        Serial.print(packet[j], HEX);
-        Serial.print(" ");
-      }
-      Serial.println();
+  if (fallState == 1) {
+    currentMessage = "EMERGENCY: FALL DETECTED — SOS triggered";
+    stillSince = 0;
+  }
+  else if (staticDwell == 1) {
+    currentMessage = "EMERGENCY: PERSON MOTIONLESS TOO LONG — possible faint";
+    stillSince = 0;
+  }
+  else if (presence == 1 && movement <= 1 && movingRange < 5) {
+    if (stillSince == 0) stillSince = millis();
+    if (millis() - stillSince > 10000) {
+      currentMessage = "WARNING: Person unusually still — watching closely";
+    } else {
+      currentMessage = "Person entered — currently still";
     }
   }
+  else if (presence == 1 && movement == 2) {
+    currentMessage = "Bathroom in use — person active, all normal";
+    stillSince = 0;
+  }
+  else if (presence == 1 && movement == 1 && movingRange >= 5) {
+    currentMessage = "Person in bathroom — standing or sitting, normal";
+    stillSince = 0;
+  }
+  else if (presence == 0) {
+    currentMessage = "Bathroom empty — all clear";
+    stillSince = 0;
+  }
+  else {
+    currentMessage = "Reading unclear — continuing to monitor";
+  }
+
+  sendMessage(currentMessage);
+  delay(1000);
 }

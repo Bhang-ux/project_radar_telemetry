@@ -1,0 +1,7 @@
+const char* WIFI_SSID   = "Galaxy A25 5G BD6A";
+const char* WIFI_PASS   = "12345678";
+const char* MQTT_BROKER = "broker.hivemq.com";
+const char* MQTT_TOPIC  = "nivaasiq/bathroom/status";
+const int   MQTT_PORT   = 1883;
+
+Library installed in platform.ini-    knolleary/PubSubClient @ ^2.8

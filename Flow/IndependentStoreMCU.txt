@@ -5,3 +5,5 @@ MQTT Server should see the current states
 Disconnect and plug in to LaptopMQTT
 run the RunStoredData.py file
 a csv file will come at data with all thetime stamps
+the file will keep logging data as long as the sensor is connected
+to clear the database run clearlog.py

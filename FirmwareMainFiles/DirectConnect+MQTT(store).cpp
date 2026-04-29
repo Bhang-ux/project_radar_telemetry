@@ -8,12 +8,12 @@
 DFRobot_HumanDetection hu(&Serial2);
 
 // -------- CHANGE THESE --------
-const char* WIFI_SSID   = "YOUR_WIFI_NAME";
-const char* WIFI_PASS   = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID   = "Galaxy F34 5G 9685";
+const char* WIFI_PASS   = "19062023";
 const char* MQTT_BROKER = "broker.hivemq.com";
 const char* MQTT_TOPIC  = "nivaasiq/bathroom/status";
 const int   MQTT_PORT   = 1883;
-// ------------------------------
+// ------------------a------------
 
 WiFiClient wifiClient;
 PubSubClient mqtt(wifiClient);
@@ -129,7 +129,9 @@ void dumpLogFile(String filename) {
   file.close();
 }
 
-void setup() {
+void setup() {SPIFFS.remove("/events.csv");
+SPIFFS.remove("/events_old.csv");
+Serial.println("Logs cleared");
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, 16, 17);
 
@@ -244,3 +246,37 @@ void loop() {
   checkStorage();
   delay(0);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

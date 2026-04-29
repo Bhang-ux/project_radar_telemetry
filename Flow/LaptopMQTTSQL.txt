@@ -5,3 +5,4 @@ MQTT should be connected to server brokerhives
 then run the command python backend/logger.py
 a db file will form in data that will entry all the current states with timeline
 at the same time on phone you will be able to see the commands
+to view the db file put command python read_db.py
